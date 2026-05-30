@@ -12,7 +12,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from knowledge_mcp.models import Edge, Memory, MemoryType, RecallHit, utcnow
+from knowledge_mcp.models import Edge, Memory, MemoryType, RecallHit, Relation, utcnow
 from knowledge_mcp.retrieval.contextual import Contextualizer, default_contextualizer
 from knowledge_mcp.retrieval.embed import Embedder, default_embedder
 from knowledge_mcp.retrieval.hybrid import rrf_fuse
@@ -136,16 +136,53 @@ class KnowledgeEngine:
         relation: str,
         valid_from: datetime | None = None,
         valid_to: datetime | None = None,
+        supersede: bool = False,
     ) -> str:
+        """Write a bitemporal edge.
+
+        With `supersede=True` this is a contradiction-aware update: any currently-open
+        edge with the same `(from_id, relation)` but a *different* target is bitemporally
+        closed in valid-time at the new edge's `valid_from` before the new edge is added.
+        This is what turns the canonical "project focus A -> B" shift into a single call
+        (the old A edge stays queryable for instants before the cutover; B applies after).
+        Both rows live forever -- nothing is deleted.
+        """
+        vf = valid_from or utcnow()
+        if supersede:
+            for e in self.store.edges_for(from_id):
+                if (
+                    e.from_id == from_id
+                    and e.relation == relation
+                    and e.to_id != to_id
+                    and e.valid_to is None
+                    and e.expired_at is None
+                ):
+                    self.store.close_edge(e.id, valid_to=vf)
         edge = Edge(
             id=_new_id("edge"),
             from_id=from_id,
             to_id=to_id,
             relation=relation,
-            valid_from=valid_from or utcnow(),
+            valid_from=vf,
             valid_to=valid_to,
         )
         return self.store.add_edge(edge)
+
+    def annotate(self, target_id: str, note: str, source: str | None = None) -> str:
+        """Attach a first-class annotation to an existing memory.
+
+        The annotation is itself a memory (captured, contextualized against its target,
+        embedded and indexed like any other) linked back to the target with an
+        `ANNOTATES` edge, so it is both recallable and visible in the target's timeline.
+        """
+        if self.store.get_memory(target_id) is None:
+            raise ValueError(f"unknown memory: {target_id}")
+        return self.remember(
+            content=note,
+            type=MemoryType.EPISODIC,
+            source=source,
+            links=[{"to": target_id, "relation": Relation.ANNOTATES.value}],
+        )
 
     def timeline(self, entity_id: str) -> list[Edge]:
         return self.store.timeline(entity_id)

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
+import pytest
+
 from knowledge_mcp.models import MemoryType
 
 
@@ -53,6 +55,47 @@ def test_recall_handles_fts5_operator_chars_in_query(engine):
     # The substantive query still finds the memory.
     hits = engine.recall("what does Helios focus on?", k=3)
     assert any("Helios" in h.memory.content for h in hits)
+
+
+def test_link_supersede_shifts_focus_pointintime(engine):
+    """A single `supersede=True` link turns the project-focus A->B shift into one
+    call: the old edge is closed in valid-time at the new edge's valid_from, both
+    rows survive, and point-in-time queries resolve to the right target.
+    """
+    t0 = datetime(2026, 1, 1, tzinfo=UTC)
+    t1 = datetime(2026, 3, 1, tzinfo=UTC)
+    proj = engine.remember("Project Helix.", type=MemoryType.SEMANTIC, occurred_at=t0)
+    a = engine.remember("Focus A: retrieval.", type=MemoryType.SEMANTIC, occurred_at=t0)
+    b = engine.remember("Focus B: dreaming.", type=MemoryType.SEMANTIC, occurred_at=t1)
+
+    engine.link(proj, a, "FOCUSES_ON", valid_from=t0)
+    engine.link(proj, b, "FOCUSES_ON", valid_from=t1, supersede=True)
+
+    def focus_targets(as_of):
+        edges = engine.store.edges_for(proj, as_of=as_of)
+        return {e.to_id for e in edges if e.relation == "FOCUSES_ON"}
+
+    assert focus_targets(t0 + timedelta(days=5)) == {a}
+    assert focus_targets(t1 + timedelta(days=5)) == {b}
+    # Both edges are retained in the full history (nothing deleted).
+    assert sum(e.relation == "FOCUSES_ON" for e in engine.timeline(proj)) == 2
+
+
+def test_annotate_links_target_and_is_recallable(engine):
+    target = engine.remember("Helios uses RRF fusion.", type=MemoryType.SEMANTIC)
+    ann = engine.annotate(target, "Reminder: tune the RRF k constant to 60.")
+
+    # The annotation is linked back to its target with an ANNOTATES edge...
+    edges = engine.store.edges_for(target)
+    assert any(e.relation == "ANNOTATES" and e.from_id == ann and e.to_id == target for e in edges)
+    # ...and is itself a recallable memory.
+    hits = engine.recall("tune RRF k constant", k=5)
+    assert any(h.memory.id == ann for h in hits)
+
+
+def test_annotate_unknown_target_raises(engine):
+    with pytest.raises(ValueError):
+        engine.annotate("mem_does_not_exist", "orphan note")
 
 
 def test_recall_attaches_pointintime_graph_context(engine):

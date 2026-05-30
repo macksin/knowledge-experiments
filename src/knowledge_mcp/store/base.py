@@ -14,7 +14,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from datetime import datetime
 
-from knowledge_mcp.models import Edge, Memory, MemoryType
+from knowledge_mcp.models import ConsolidationState, Edge, Memory, MemoryType
 
 # A retrieval candidate: (memory_id, score) where higher score == more relevant.
 Candidate = tuple[str, float]
@@ -80,3 +80,18 @@ class MemoryStore(ABC):
     @abstractmethod
     def timeline(self, entity_id: str) -> list[Edge]:
         """All edges touching an entity, ordered by valid_from (full history)."""
+
+    @abstractmethod
+    def list_memories(
+        self,
+        types: list[MemoryType] | None = None,
+        state: ConsolidationState | None = None,
+        limit: int | None = None,
+    ) -> list[Memory]:
+        """Memories matching the filters, oldest-first. Used by the dreaming job to
+        pull the batch of raw episodes awaiting consolidation."""
+
+    # --- consolidation ---
+    @abstractmethod
+    def set_consolidation_state(self, memory_id: str, state: ConsolidationState) -> None:
+        """Mark a memory raw/consolidated (the dreaming job's bookkeeping)."""

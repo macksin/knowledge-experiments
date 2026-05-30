@@ -11,7 +11,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from knowledge_mcp.models import Edge, Memory, MemoryType
+from knowledge_mcp.models import ConsolidationState, Edge, Memory, MemoryType
 from knowledge_mcp.store.sqlite_store import SQLiteStore
 
 DIM = 384
@@ -107,3 +107,22 @@ def test_retraction_drops_from_current_belief(any_store):
 def test_embedding_dim_mismatch_raises(any_store):
     with pytest.raises(ValueError):
         any_store.add_memory(Memory(id="bad", content="x"), [0.0, 0.0])
+
+
+def test_list_memories_filters_by_type_and_state(any_store):
+    any_store.add_memory(Memory(id="e1", type=MemoryType.EPISODIC, content="raw one"), _vec(1.0))
+    any_store.add_memory(Memory(id="e2", type=MemoryType.EPISODIC, content="raw two"), _vec(1.0))
+    any_store.add_memory(Memory(id="s1", type=MemoryType.SEMANTIC, content="a fact"), _vec(1.0))
+
+    raw_eps = any_store.list_memories(
+        types=[MemoryType.EPISODIC], state=ConsolidationState.RAW
+    )
+    assert {m.id for m in raw_eps} == {"e1", "e2"}
+    assert len(any_store.list_memories(limit=2)) == 2
+
+
+def test_set_consolidation_state(any_store):
+    any_store.add_memory(Memory(id="e1", type=MemoryType.EPISODIC, content="raw"), _vec(1.0))
+    any_store.set_consolidation_state("e1", ConsolidationState.CONSOLIDATED)
+    assert any_store.get_memory("e1").consolidation_state == ConsolidationState.CONSOLIDATED
+    assert any_store.list_memories(state=ConsolidationState.RAW) == []

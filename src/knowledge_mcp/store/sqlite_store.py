@@ -293,5 +293,34 @@ class SQLiteStore(MemoryStore):
         ).fetchall()
         return [self._row_to_edge(r) for r in rows]
 
+    def list_memories(
+        self,
+        types: list[MemoryType] | None = None,
+        state: ConsolidationState | None = None,
+        limit: int | None = None,
+    ) -> list[Memory]:
+        sql = "SELECT * FROM memories WHERE 1=1"
+        params: list[object] = []
+        if types:
+            placeholders = ",".join("?" for _ in types)
+            sql += f" AND type IN ({placeholders})"
+            params.extend(t.value for t in types)
+        if state is not None:
+            sql += " AND consolidation_state = ?"
+            params.append(state.value)
+        sql += " ORDER BY created_at ASC"
+        if limit is not None:
+            sql += " LIMIT ?"
+            params.append(limit)
+        rows = self.conn.execute(sql, params).fetchall()
+        return [self._row_to_memory(r) for r in rows]
+
+    def set_consolidation_state(self, memory_id: str, state: ConsolidationState) -> None:
+        self.conn.execute(
+            "UPDATE memories SET consolidation_state = ? WHERE id = ?",
+            (state.value, memory_id),
+        )
+        self.conn.commit()
+
     def close(self) -> None:
         self.conn.close()

@@ -49,6 +49,8 @@ class Relation(StrEnum):
     MENTIONS = "MENTIONS"
     CONFLICTS_WITH = "CONFLICTS_WITH"
     ANNOTATES = "ANNOTATES"
+    # Provenance: a consolidated memory was derived from a raw source episode (dreaming).
+    DERIVED_FROM = "DERIVED_FROM"
 
 
 class Memory(BaseModel):

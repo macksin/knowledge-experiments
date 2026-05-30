@@ -12,6 +12,7 @@ from datetime import datetime
 from mcp.server.fastmcp import FastMCP
 
 from knowledge_mcp.config import settings
+from knowledge_mcp.dreaming.engine import DreamEngine
 from knowledge_mcp.engine import KnowledgeEngine
 from knowledge_mcp.models import MemoryType
 from knowledge_mcp.store.sqlite_store import SQLiteStore
@@ -19,6 +20,7 @@ from knowledge_mcp.store.sqlite_store import SQLiteStore
 mcp = FastMCP("knowledge-mcp")
 
 _engine: KnowledgeEngine | None = None
+_dream: DreamEngine | None = None
 
 
 def get_engine() -> KnowledgeEngine:
@@ -28,6 +30,13 @@ def get_engine() -> KnowledgeEngine:
         store.init_schema()
         _engine = KnowledgeEngine(store)
     return _engine
+
+
+def get_dream_engine() -> DreamEngine:
+    global _dream
+    if _dream is None:
+        _dream = DreamEngine(get_engine())
+    return _dream
 
 
 def _parse_dt(value: str | None) -> datetime | None:
@@ -114,6 +123,20 @@ def timeline(entity_or_topic: str) -> list[dict]:
     """History / point-in-time view of an entity's edges (the A->B case)."""
     edges = get_engine().timeline(entity_or_topic)
     return [e.model_dump(mode="json") for e in edges]
+
+
+@mcp.tool()
+def dream_now(batch_limit: int | None = None) -> dict:
+    """Run the consolidation ('dreaming') pass now: turn raw episodes into durable
+    semantic / procedural / self_schema memories, linked back to their sources.
+    Idempotent. Returns a summary of what was consolidated."""
+    return get_dream_engine().dream(batch_limit=batch_limit).model_dump(mode="json")
+
+
+@mcp.tool()
+def dream_status() -> dict:
+    """Report pending (unconsolidated) episodes and memory counts by type."""
+    return get_dream_engine().status()
 
 
 def main() -> None:

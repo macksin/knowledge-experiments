@@ -83,16 +83,30 @@ def link(
     relation: str,
     valid_from: str | None = None,
     valid_to: str | None = None,
+    supersede: bool = False,
 ) -> dict:
-    """Create a typed bitemporal edge between two memories/entities."""
+    """Create a typed bitemporal edge between two memories/entities.
+
+    Set `supersede=True` when the relation's value changed (e.g. a project's focus
+    shifting A->B): any open edge with the same (from_id, relation) but a different
+    target is closed in valid-time at this edge's `valid_from`. Nothing is deleted.
+    """
     edge_id = get_engine().link(
         from_id=from_id,
         to_id=to_id,
         relation=relation,
         valid_from=_parse_dt(valid_from),
         valid_to=_parse_dt(valid_to),
+        supersede=supersede,
     )
     return {"id": edge_id}
+
+
+@mcp.tool()
+def annotate(memory_id: str, note: str, source: str | None = None) -> dict:
+    """Attach a first-class annotation (a linked, recallable note) to a memory."""
+    ann_id = get_engine().annotate(memory_id, note, source=source)
+    return {"id": ann_id}
 
 
 @mcp.tool()

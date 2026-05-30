@@ -1,0 +1,49 @@
+[project]
+name = "knowledge-mcp"
+version = "0.1.0"
+description = "Local-first MCP server for knowledge & memory: bitemporal graph + contextual retrieval + a four-type cognitive taxonomy."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "mcp>=1.2.0",
+    "pydantic>=2.6",
+    "pydantic-settings>=2.2",
+    "sqlite-vec>=0.1.6",
+]
+
+[project.optional-dependencies]
+# Real (network/model-backed) providers. Optional because the MVP runs fully
+# offline with deterministic fallbacks; install these to enable real embeddings,
+# cross-encoder reranking, and Anthropic-generated contextual blurbs.
+real = [
+    "fastembed>=0.3",
+    "sentence-transformers>=3.0",
+    "anthropic>=0.39",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.6",
+]
+
+[project.scripts]
+knowledge-mcp = "knowledge_mcp.server:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/knowledge_mcp"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]

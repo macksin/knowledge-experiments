@@ -216,3 +216,8 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Knowledge MCP local database
+knowledge.db
+knowledge.db-*
+*.db
